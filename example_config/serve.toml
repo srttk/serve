@@ -18,3 +18,5 @@ source = "/**"
 [[headers.headers]]
 key = "Cache-Control"
 value = "max-age=7200"
+
+ignore = [".env", "node_modules/**"]

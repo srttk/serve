@@ -66,9 +66,10 @@ Example `serve.json`:
 | `rewrites` | Internal path redirections. |
 | `redirects` | External/Internal HTTP redirections. |
 | `headers` | Custom HTTP headers per path glob. |
-| `directoryListing` | Enable/disable visual folder indexes. |
-| `symlinks` | Allow resolving symlinks. |
-| `etag` | Enable/disable ETag generation. |
+| `directoryListing` | Enable/disable visual folder indexes (default: `true`). |
+| `symlinks` | Allow resolving symlinks (default: `false`). |
+| `etag` | Enable/disable ETag generation (default: `true`). |
+| `ignore` | Array of globs to exclude from serving and listing. |
 
 ## License
 

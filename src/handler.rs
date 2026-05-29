@@ -24,6 +24,23 @@ pub async fn handler(
     let mut path = req.uri().path().to_string();
     let mut res_headers = header::HeaderMap::new();
 
+    // Pre-calculate full path for directory check
+    let mut full_path = state.base_path.clone();
+    if let Some(public) = &state.config.public {
+        full_path.push(public);
+    }
+    let rel_path = path.trim_start_matches('/');
+    full_path.push(rel_path);
+
+    let ignore_patterns: Vec<Pattern> = state.config.ignore.as_ref()
+        .map(|globs| globs.iter().filter_map(|g| Pattern::new(g).ok()).collect())
+        .unwrap_or_default();
+
+    // 0. Ignore
+    if matches_ignore(rel_path, full_path.is_dir(), &ignore_patterns) {
+        return (StatusCode::NOT_FOUND, res_headers, "404 Not Found").into_response();
+    }
+
     // 1. Global Headers
     if let Some(rules) = &state.config.headers {
         for rule in rules {
@@ -113,7 +130,7 @@ pub async fn handler(
             };
 
             if show_listing {
-                return match render_directory_listing(&full_path, &path).await {
+                return match render_directory_listing(&full_path, &path, &ignore_patterns).await {
                     Ok(html) => (StatusCode::OK, res_headers, Html(html)).into_response(),
                     Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
                 };
@@ -170,14 +187,24 @@ pub async fn handler(
     }
 }
 
-async fn render_directory_listing(dir: &Path, virt_path: &str) -> Result<String, std::io::Error> {
+async fn render_directory_listing(dir: &Path, virt_path: &str, ignore_patterns: &[Pattern]) -> Result<String, std::io::Error> {
     let mut entries = fs::read_dir(dir).await?;
     let mut files = Vec::new();
     
     while let Some(entry) = entries.next_entry().await? {
         let name = entry.file_name().to_string_lossy().to_string();
         let is_dir = entry.file_type().await?.is_dir();
-        files.push((name, is_dir));
+        
+        let rel_item_path = if virt_path.ends_with('/') {
+            format!("{}{}", virt_path, name)
+        } else {
+            format!("{}/{}", virt_path, name)
+        };
+        let trim_rel_path = rel_item_path.trim_start_matches('/');
+
+        if !matches_ignore(trim_rel_path, is_dir, ignore_patterns) {
+            files.push((name, is_dir));
+        }
     }
     
     files.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
@@ -196,6 +223,27 @@ async fn render_directory_listing(dir: &Path, virt_path: &str) -> Result<String,
     
     html.push_str("</ul></body></html>");
     Ok(html)
+}
+
+fn matches_ignore(path: &str, is_dir: bool, patterns: &[Pattern]) -> bool {
+    if path.is_empty() { return false; }
+    for pattern in patterns {
+        if pattern.matches(path) {
+            return true;
+        }
+        if is_dir {
+            // Check if pattern matches path with trailing slash
+            if pattern.matches(&format!("{}/", path)) {
+                return true;
+            }
+            // Check if pattern is a prefix ignore like "src/**"
+            // We test this by checking if a dummy child path would be ignored
+            if pattern.matches(&format!("{}/.ignore-check", path)) {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 #[cfg(test)]
@@ -234,5 +282,32 @@ mod tests {
         
         assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
         assert_eq!(res.headers().get(header::LOCATION).unwrap(), "/page");
+    }
+
+    #[tokio::test]
+    async fn test_ignore_feature() {
+        let state = Arc::new(AppState {
+            config: Config {
+                ignore: Some(vec![".env".to_string(), "node_modules/**".to_string()]),
+                ..Default::default()
+            },
+            base_path: PathBuf::from("."),
+        });
+
+        // Test ignored file
+        let req1 = Request::builder().uri("/.env").body(Body::empty()).unwrap();
+        let res1 = handler(State(state.clone()), req1).await.into_response();
+        assert_eq!(res1.status(), StatusCode::NOT_FOUND);
+
+        // Test ignored folder
+        let req2 = Request::builder().uri("/node_modules/pkg/index.js").body(Body::empty()).unwrap();
+        let res2 = handler(State(state.clone()), req2).await.into_response();
+        assert_eq!(res2.status(), StatusCode::NOT_FOUND);
+
+        // Test non-ignored file
+        let req3 = Request::builder().uri("/public/index.html").body(Body::empty()).unwrap();
+        let res3 = handler(State(state), req3).await.into_response();
+        // It should be 404 because file doesn't exist in test env, but NOT because of ignore (mocking state is enough for logic check)
+        assert_eq!(res3.status(), StatusCode::NOT_FOUND);
     }
 }

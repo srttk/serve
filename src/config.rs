@@ -15,6 +15,7 @@ pub struct Config {
     pub directory_listing: Option<DirectoryListing>,
     pub symlinks: Option<bool>,
     pub etag: Option<bool>,
+    pub ignore: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

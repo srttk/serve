@@ -15,3 +15,6 @@ headers:
         value: max-age=7200
 directoryListing: true
 etag: true
+ignore:
+  - .env
+  - node_modules/**

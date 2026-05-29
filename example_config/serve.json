@@ -17,5 +17,6 @@
     }
   ],
   "directoryListing": true,
-  "etag": true
+  "etag": true,
+  "ignore": [".env", "node_modules/**"]
 }
