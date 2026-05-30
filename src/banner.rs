@@ -1,5 +1,6 @@
 use local_ip_address::local_ip;
 use arboard::Clipboard;
+use qr2term;
 
 pub fn print_banner(port: u16, no_clipboard: bool) {
     let local_ip = local_ip().map(|ip| ip.to_string()).unwrap_or_else(|_| "127.0.0.1".to_string());
@@ -15,16 +16,24 @@ pub fn print_banner(port: u16, no_clipboard: bool) {
         }
     }
 
-    println!("┌─────────────────────────────────────────────────────────┐");
-    println!("│                                                         │");
-    println!("│   Serving!                                              │");
-    println!("│                                                         │");
-    println!("│   - Local:            {}             ", local_url);
-    println!("│   - On Your Network:  {}          ", network_url);
-    println!("│                                                         │");
+
+    println!("                                                         ");
+    println!("   Serving!                                              ");
+    println!("                                                         ");
+    println!("   - Local:            {}             ", local_url);
+    println!("   - On Your Network:  {}          ", network_url);
+    println!("                                                         ");
     if !clipboard_msg.is_empty() {
-        println!("│{}                    │", clipboard_msg);
-        println!("│                                                         │");
+        println!("{}                    ", clipboard_msg);
+        println!("                                                         ");
     }
-    println!("└─────────────────────────────────────────────────────────┘");
+    println!("");
+
+    let qr_code = qr2term::generate_qr_string(&network_url).unwrap();
+
+    println!("   Scan QR Code \n{}", qr_code);
+
+    
+
+    
 }
