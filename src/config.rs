@@ -16,6 +16,32 @@ pub struct Config {
     pub symlinks: Option<bool>,
     pub etag: Option<bool>,
     pub ignore: Option<Vec<String>>,
+    pub media: Option<MediaConfig>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct MediaConfig {
+    pub stream_extensions: Option<Vec<String>>,
+    pub enable_ranges: Option<bool>,
+}
+
+impl Default for MediaConfig {
+    fn default() -> Self {
+        Self {
+            stream_extensions: Some(vec![
+                "mp4".to_string(),
+                "webm".to_string(),
+                "ogg".to_string(),
+                "mp3".to_string(),
+                "wav".to_string(),
+                "pdf".to_string(),
+                "mkv".to_string(),
+                "mov".to_string()
+            ]),
+            enable_ranges: Some(true),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

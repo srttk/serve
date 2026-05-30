@@ -8,8 +8,9 @@ A high-performance, concurrent, and robust static site serving command-line util
 - **Flexible Configuration:** Supports `serve.json`, `serve.yaml`, and `serve.toml`.
 - **Middleware Pipeline:** Headers, Redirects, Clean URLs, Trailing Slashes, and Rewrites.
 - **Directory Listing:** Beautiful, responsive folder views.
+- **Media Streaming:** Support for HTTP Range requests and high-performance disk streaming.
 - **SPA Support:** Easy Single Page Application fallback with `-s` or `--single`.
-- **Secure:** Optional symlink protection and dynamic ETag generation.
+- **Secure:** Optional symlink protection and efficient Weak ETag generation.
 - **Developer Friendly:** Beautiful startup banner and automatic clipboard integration.
 
 ## Installation
@@ -70,6 +71,7 @@ Example `serve.json`:
 | `symlinks` | Allow resolving symlinks (default: `false`). |
 | `etag` | Enable/disable ETag generation (default: `true`). |
 | `ignore` | Array of globs to exclude from serving and listing. |
+| `media` | Support for Range requests and streaming extensions. |
 
 ## License
 

@@ -8,9 +8,10 @@ use std::sync::Arc;
 use crate::config::{Config, CleanUrls, DirectoryListing};
 use std::path::{Path, PathBuf};
 use tokio::fs;
+use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use mime_guess::from_path;
 use glob::Pattern;
-use sha2::{Sha256, Digest};
+use tokio_util::io::ReaderStream;
 
 pub struct AppState {
     pub config: Config,
@@ -105,8 +106,12 @@ pub async fn handler(
     }
 
     // 6. File/Directory Resolution
+    let mut full_path = state.base_path.clone();
+    if let Some(public) = &state.config.public {
+        full_path.push(public);
+    }
     let rel_path = path.trim_start_matches('/');
-    let mut full_path = state.base_path.join(rel_path);
+    full_path.push(rel_path);
 
     // If cleanUrls is active, we might need to append .html internally
     if !full_path.exists() && !path.ends_with(".html") {
@@ -161,29 +166,91 @@ pub async fn handler(
         return (StatusCode::NOT_FOUND, res_headers, "404 Not Found").into_response();
     }
 
-    // Serve file
-    match fs::read(&full_path).await {
-        Ok(content) => {
-            let mime = from_path(&full_path).first_or_octet_stream();
-            res_headers.insert(header::CONTENT_TYPE, header::HeaderValue::from_str(mime.as_ref()).unwrap());
+    // Serve file (Streaming with Range support)
+    let metadata = match fs::metadata(&full_path).await {
+        Ok(m) => m,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    let size = metadata.len();
 
-            // ETag
-            if state.config.etag.unwrap_or(true) {
-                let mut hasher = Sha256::new();
-                hasher.update(&content);
-                let etag = format!("W/\"{}-{}\"", content.len(), hex::encode(hasher.finalize()));
-                
-                if let Some(if_none_match) = req.headers().get(header::IF_NONE_MATCH) {
-                    if if_none_match == etag.as_str() {
-                        return (StatusCode::NOT_MODIFIED, res_headers).into_response();
-                    }
-                }
-                res_headers.insert(header::ETAG, header::HeaderValue::from_str(&etag).unwrap());
+    // ETag (Weak)
+    if state.config.etag.unwrap_or(true) {
+        let mtime = metadata.modified().ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+        let etag = format!("W/\"{:x}-{:x}\"", size, mtime);
+        
+        if let Some(if_none_match) = req.headers().get(header::IF_NONE_MATCH) {
+            if if_none_match == etag.as_str() {
+                return (StatusCode::NOT_MODIFIED, res_headers).into_response();
             }
-
-            (StatusCode::OK, res_headers, content).into_response()
         }
-        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+        res_headers.insert(header::ETAG, header::HeaderValue::from_str(&etag).unwrap());
+    }
+
+    let mime = from_path(&full_path).first_or_octet_stream();
+    res_headers.insert(header::CONTENT_TYPE, header::HeaderValue::from_str(mime.as_ref()).unwrap());
+    res_headers.insert(header::ACCEPT_RANGES, header::HeaderValue::from_static("bytes"));
+
+    let mut file = match fs::File::open(&full_path).await {
+        Ok(f) => f,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Internal Server Error").into_response(),
+    };
+    
+    // Range support
+    let media = state.config.media.as_ref().cloned().unwrap_or_default();
+    let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("");
+    let is_streamable = media.stream_extensions.as_ref()
+        .map(|exts| exts.iter().any(|s| s == ext))
+        .unwrap_or(false);
+
+    if media.enable_ranges.unwrap_or(true) && is_streamable {
+        if let Some(range_header) = req.headers().get(header::RANGE) {
+            if let Ok(range_str) = range_header.to_str() {
+                if let Some(range) = parse_range(range_str, size) {
+                    let range_size = range.end - range.start + 1;
+                    if let Ok(_) = file.seek(std::io::SeekFrom::Start(range.start)).await {
+                        let stream = ReaderStream::new(file.take(range_size));
+                        
+                        res_headers.insert(header::CONTENT_RANGE, header::HeaderValue::from_str(&format!("bytes {}-{}/{}", range.start, range.end, size)).unwrap());
+                        res_headers.insert(header::CONTENT_LENGTH, header::HeaderValue::from(range_size));
+                        
+                        return (StatusCode::PARTIAL_CONTENT, res_headers, Body::from_stream(stream)).into_response();
+                    }
+                } else {
+                    return (StatusCode::RANGE_NOT_SATISFIABLE, res_headers).into_response();
+                }
+            }
+        }
+    }
+
+    let stream = ReaderStream::new(file);
+    (StatusCode::OK, res_headers, Body::from_stream(stream)).into_response()
+}
+
+struct ByteRange {
+    start: u64,
+    end: u64,
+}
+
+fn parse_range(range: &str, size: u64) -> Option<ByteRange> {
+    if !range.starts_with("bytes=") { return None; }
+    let range = &range[6..];
+    let parts: Vec<&str> = range.split('-').collect();
+    if parts.len() != 2 { return None; }
+    
+    let start = parts[0].parse::<u64>().ok();
+    let end = parts[1].parse::<u64>().ok();
+    
+    match (start, end) {
+        (Some(s), Some(e)) if s <= e && e < size => Some(ByteRange { start: s, end: e }),
+        (Some(s), None) if s < size => Some(ByteRange { start: s, end: size - 1 }),
+        (None, Some(e)) if e > 0 => {
+            let offset = if e > size { size } else { e };
+            Some(ByteRange { start: size - offset, end: size - 1 })
+        },
+        _ => None,
     }
 }
 
@@ -309,5 +376,29 @@ mod tests {
         let res3 = handler(State(state), req3).await.into_response();
         // It should be 404 because file doesn't exist in test env, but NOT because of ignore (mocking state is enough for logic check)
         assert_eq!(res3.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[test]
+    fn test_parse_range() {
+        let size = 1000;
+        
+        // Simple range
+        let r1 = parse_range("bytes=0-499", size).unwrap();
+        assert_eq!(r1.start, 0);
+        assert_eq!(r1.end, 499);
+        
+        // Open ended
+        let r2 = parse_range("bytes=500-", size).unwrap();
+        assert_eq!(r2.start, 500);
+        assert_eq!(r2.end, 999);
+        
+        // Suffix (last n bytes)
+        let r3 = parse_range("bytes=-100", size).unwrap();
+        assert_eq!(r3.start, 900);
+        assert_eq!(r3.end, 999);
+        
+        // Invalid
+        assert!(parse_range("bytes=1000-", size).is_none());
+        assert!(parse_range("bytes=500-400", size).is_none());
     }
 }

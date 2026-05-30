@@ -2,3 +2,5 @@
 /spec
 .DS_Store
 .idea
+*.mp4
+serve.toml
