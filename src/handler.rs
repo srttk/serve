@@ -146,11 +146,6 @@ pub async fn handler(
     }
 
     if !full_path.exists() {
-        // SPA fallback
-        if state.config.rewrites.is_none() { 
-            // If we are here and -s was passed, we should fallback to index.html
-        }
-        
         return (StatusCode::NOT_FOUND, res_headers, "404 Not Found").into_response();
     }
 
