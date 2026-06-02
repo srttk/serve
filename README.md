@@ -1,4 +1,4 @@
-# serve-rust
+# serve
 
 A high-performance, concurrent, and robust static site serving command-line utility written in Rust. This tool is designed to serve static websites, single-page applications (SPAs), and folder contents with optimal speed and security, serving as a drop-in replacement for the popular `serve` NPM package.
 
@@ -23,27 +23,27 @@ cargo install --path .
 
 Serve the current directory:
 ```bash
-serve-rust
+serve
 ```
 
 Serve a specific directory on a custom port:
 ```bash
-serve-rust ./public -p 5000
+serve ./public -p 5000
 ```
 
 Enable SPA fallback:
 ```bash
-serve-rust -s
+serve -s
 ```
 
 Listen on a specific address:
 ```bash
-serve-rust -l localhost:8080
+serve -l localhost:8080
 ```
 
 ## Configuration
 
-You can configure `serve-rust` using a `serve.json`, `serve.yaml`, or `serve.toml` file.
+You can configure `serve` using a `serve.json`, `serve.yaml`, or `serve.toml` file.
 
 Example `serve.json`:
 
@@ -71,7 +71,31 @@ Example `serve.json`:
 | `symlinks` | Allow resolving symlinks (default: `false`). |
 | `etag` | Enable/disable ETag generation (default: `true`). |
 | `ignore` | Array of globs to exclude from serving and listing. |
-| `media` | Support for Range requests and streaming extensions. |
+| `stream` | Support for Range requests and streaming extensions. |
+
+### `stream`
+
+Enables high-performance video and audio streaming by supporting HTTP Range requests and disk streaming.
+
+| Option | Type | Description | Default |
+| --- | --- | --- | --- |
+| `streamExtensions` | `String[]` | File extensions to handle via streaming and Range requests. | `["mp4", "webm", "ogg", "mp3", "wav", "pdf", "mkv", "mov"]` |
+| `enableRanges` | `Boolean` | Enable/disable HTTP Range request support. | `true` |
+
+Example:
+```json
+{
+  "stream": {
+    "streamExtensions": ["mp4", "webm", "mov"],
+    "enableRanges": true
+  }
+}
+```
+
+#### Benefits
+- **Seeking:** Allows instant jumping to any part of a video or audio file.
+- **Memory Efficiency:** Handles files of any size (GBs) with minimal RAM overhead.
+- **Performance:** Faster "Time to First Byte" (TTFB) for media playback.
 
 ## License
 

@@ -19,7 +19,7 @@
   "directoryListing": true,
   "etag": true,
   "ignore": [".env", "node_modules/**"],
-  "media": {
+  "stream": {
     "streamExtensions": ["mp4", "webm", "ogg", "mp3", "wav", "pdf"],
     "enableRanges": true
   }

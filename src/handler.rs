@@ -194,13 +194,13 @@ pub async fn handler(
     };
     
     // Range support
-    let media = state.config.media.as_ref().cloned().unwrap_or_default();
+    let stream_config = state.config.stream.as_ref().cloned().unwrap_or_default();
     let ext = full_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-    let is_streamable = media.stream_extensions.as_ref()
+    let is_streamable = stream_config.stream_extensions.as_ref()
         .map(|exts| exts.iter().any(|s| s == ext))
         .unwrap_or(false);
 
-    if media.enable_ranges.unwrap_or(true) && is_streamable {
+    if stream_config.enable_ranges.unwrap_or(true) && is_streamable {
         if let Some(range_header) = req.headers().get(header::RANGE) {
             if let Ok(range_str) = range_header.to_str() {
                 if let Some(range) = parse_range(range_str, size) {

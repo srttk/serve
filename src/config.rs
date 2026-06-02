@@ -16,17 +16,17 @@ pub struct Config {
     pub symlinks: Option<bool>,
     pub etag: Option<bool>,
     pub ignore: Option<Vec<String>>,
-    pub media: Option<MediaConfig>,
+    pub stream: Option<StreamConfig>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
-pub struct MediaConfig {
+pub struct StreamConfig {
     pub stream_extensions: Option<Vec<String>>,
     pub enable_ranges: Option<bool>,
 }
 
-impl Default for MediaConfig {
+impl Default for StreamConfig {
     fn default() -> Self {
         Self {
             stream_extensions: Some(vec![
@@ -149,5 +149,19 @@ mod tests {
         let config: Config = toml::from_str(toml).unwrap();
         assert_eq!(config.public, Some("web".to_string()));
         assert!(matches!(config.clean_urls, Some(CleanUrls::Boolean(true))));
+    }
+
+    #[test]
+    fn test_config_stream_parsing() {
+        let json = r#"{
+            "stream": {
+                "streamExtensions": ["mp4", "mkv"],
+                "enableRanges": false
+            }
+        }"#;
+        let config: Config = serde_json::from_str(json).unwrap();
+        let stream = config.stream.unwrap();
+        assert_eq!(stream.stream_extensions.unwrap()[0], "mp4");
+        assert_eq!(stream.enable_ranges.unwrap(), false);
     }
 }
