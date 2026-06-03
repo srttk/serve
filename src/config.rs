@@ -116,6 +116,47 @@ impl Config {
 
         Ok(Config::default())
     }
+
+    pub fn generate_default_config(format: &str) -> Result<()> {
+        let config = Config {
+            public: Some(".".to_string()),
+            clean_urls: Some(CleanUrls::Boolean(true)),
+            trailing_slash: Some(true),
+            etag: Some(true),
+            symlinks: Some(false),
+            directory_listing: Some(DirectoryListing::Boolean(true)),
+            headers: Some(vec![HeaderRule {
+                source: "/**".to_string(),
+                headers: vec![Header {
+                    key: "Server".to_string(),
+                    value: "srttk/serve".to_string(),
+                }],
+            }]),
+            ignore: Some(vec![
+                ".DS_Store".to_string(),
+                ".env".to_string(),
+                "node_modules/**".to_string(),
+                ".git/**".to_string()
+            ]),
+            stream: Some(StreamConfig::default()),
+            ..Default::default()
+        };
+
+        let (filename, content) = match format.to_lowercase().as_str() {
+            "json" => ("serve.json", serde_json::to_string_pretty(&config)?),
+            "yaml" | "yml" => ("serve.yaml", serde_yaml::to_string(&config)?),
+            "toml" => ("serve.toml", toml::to_string_pretty(&config)?),
+            _ => anyhow::bail!("Unsupported config type: {}. Supported types: json, yaml, toml", format),
+        };
+
+        if Path::new(filename).exists() {
+            anyhow::bail!("Configuration file {} already exists", filename);
+        }
+
+        fs::write(filename, content)?;
+        println!("Successfully created {}", filename);
+        Ok(())
+    }
 }
 
 #[cfg(test)]

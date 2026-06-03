@@ -41,6 +41,11 @@ Listen on a specific address:
 serve -l localhost:8080
 ```
 
+Initialize a default configuration:
+```bash
+serve --init [json|yaml|toml]
+```
+
 ## Configuration
 
 You can configure `serve` using a `serve.json`, `serve.yaml`, or `serve.toml` file.

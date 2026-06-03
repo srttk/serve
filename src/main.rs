@@ -41,12 +41,21 @@ pub struct Args {
     /// Prevent copying the local address to the clipboard
     #[arg(long)]
     pub no_clipboard: bool,
+
+    /// Initialize a configuration file (json, yaml, toml)
+    #[arg(long, num_args(0..=1), default_missing_value = "json")]
+    pub init: Option<String>,
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let args = Args::parse();
     
+    if let Some(format) = args.init {
+        Config::generate_default_config(&format)?;
+        return Ok(());
+    }
+
     // Initialize tracing
     let filter = if args.debug {
         "serve=debug,tower_http=debug"

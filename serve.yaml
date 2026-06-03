@@ -1,0 +1,29 @@
+public: .
+cleanUrls: true
+trailingSlash: true
+rewrites: null
+redirects: null
+headers:
+- source: /**
+  headers:
+  - key: Server
+    value: srttk/serve
+directoryListing: true
+symlinks: false
+etag: true
+ignore:
+- .DS_Store
+- .env
+- node_modules/**
+- .git/**
+stream:
+  streamExtensions:
+  - mp4
+  - webm
+  - ogg
+  - mp3
+  - wav
+  - pdf
+  - mkv
+  - mov
+  enableRanges: true
