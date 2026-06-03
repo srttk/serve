@@ -4,6 +4,7 @@ use axum::{
     http::{Request, StatusCode, header},
     response::{IntoResponse, Html},
 };
+use percent_encoding::{percent_decode_str, utf8_percent_encode, NON_ALPHANUMERIC};
 use std::sync::Arc;
 use crate::config::{Config, CleanUrls, DirectoryListing};
 use std::path::{Path, PathBuf};
@@ -22,7 +23,7 @@ pub async fn handler(
     State(state): State<Arc<AppState>>,
     req: Request<Body>,
 ) -> impl IntoResponse {
-    let mut path = req.uri().path().to_string();
+    let mut path = percent_decode_str(req.uri().path()).decode_utf8_lossy().to_string();
     let mut res_headers = header::HeaderMap::new();
 
     // Pre-calculate full path for directory check
@@ -280,7 +281,8 @@ async fn render_directory_listing(dir: &Path, virt_path: &str, ignore_patterns: 
 
     for (name, is_dir) in files {
         let suffix = if is_dir { "/" } else { "" };
-        html.push_str(&format!("<li><a href=\"{}{}\">{}{}</a></li>", name, suffix, name, suffix));
+        let encoded_name = utf8_percent_encode(&name, NON_ALPHANUMERIC).to_string();
+        html.push_str(&format!("<li><a href=\"{}{}\">{}{}</a></li>", encoded_name, suffix, name, suffix));
     }
     
     html.push_str("</ul></body></html>");

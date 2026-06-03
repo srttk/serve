@@ -1,2 +1,0 @@
-ignore = [".env", "node_modules/**", "Makefile","src/**",".git","*.md"]
-directoryListing = true

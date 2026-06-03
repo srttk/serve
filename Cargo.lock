@@ -1342,6 +1342,7 @@ dependencies = [
  "http",
  "local-ip-address",
  "mime_guess",
+ "percent-encoding",
  "qr2term",
  "regex",
  "serde",
