@@ -17,6 +17,7 @@ pub struct Config {
     pub etag: Option<bool>,
     pub ignore: Option<Vec<String>>,
     pub stream: Option<StreamConfig>,
+    pub spa: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

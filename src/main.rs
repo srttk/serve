@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use axum::{routing::any, Router, extract::DefaultBodyLimit};
 use std::net::SocketAddr;
-use crate::config::{Config, Rewrite};
+use crate::config::Config;
 use crate::handler::{handler, AppState};
 use crate::banner::print_banner;
 
@@ -68,17 +68,9 @@ async fn main() -> anyhow::Result<()> {
 
     let mut config = Config::find_and_load(args.config)?;
     
-    // Handle SPA fallback via a rewrite if -s is passed
+    // Handle SPA fallback via config field if -s is passed
     if args.single {
-        let spa_rewrite = Rewrite {
-            source: "/**".to_string(),
-            destination: "/index.html".to_string(),
-        };
-        if let Some(rewrites) = &mut config.rewrites {
-            rewrites.push(spa_rewrite);
-        } else {
-            config.rewrites = Some(vec![spa_rewrite]);
-        }
+        config.spa = Some(true);
     }
 
     let shared_state = Arc::new(AppState {
