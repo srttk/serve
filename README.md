@@ -10,8 +10,8 @@ A high-performance, concurrent, and robust static site serving command-line util
 - **Directory Listing:** Beautiful, responsive folder views.
 - **Media Streaming:** Support for HTTP Range requests and high-performance disk streaming.
 - **SPA Support:** Easy Single Page Application fallback with `-s` or `--single`.
+- **Authentication:** HTTP Basic Authentication support for specific paths or the entire site.
 - **Secure:** Optional symlink protection and efficient Weak ETag generation.
-- **Developer Friendly:** Beautiful startup banner and automatic clipboard integration.
 
 ## Installation
 
@@ -77,6 +77,34 @@ Example `serve.json`:
 | `etag` | Enable/disable ETag generation (default: `true`). |
 | `ignore` | Array of globs to exclude from serving and listing. |
 | `stream` | Support for Range requests and streaming extensions. |
+| `auth` | Basic Authentication rules for path protection. |
+
+### `auth`
+
+Protects specific paths or the entire site using HTTP Basic Authentication.
+
+> [!NOTE]
+> If multiple patterns match a request path, the most specific rule (the one with the longest `source` pattern) will be applied. This ensures that detailed rules like `/admin/**` take precedence over broader ones like `/**`, regardless of their order in the configuration file.
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `source` | `String` | Path glob pattern to protect (e.g., `/private/**`). |
+| `username` | `String` | Authorized username. |
+| `password` | `String` | Authorized password (optional if `env_password` is used). |
+| `env_password` | `String` | Name of environment variable containing the password. |
+
+Example:
+```json
+{
+  "auth": [
+    {
+      "source": "/private/**",
+      "username": "admin",
+      "password": "secretpassword"
+    }
+  ]
+}
+```
 
 ### `stream`
 
