@@ -13,6 +13,7 @@ use tokio::io::{AsyncReadExt, AsyncSeekExt};
 use mime_guess::from_path;
 use glob::Pattern;
 use tokio_util::io::ReaderStream;
+use base64::{Engine as _, engine::general_purpose};
 
 pub struct AppState {
     pub config: Config,
@@ -41,6 +42,11 @@ pub async fn handler(
     // 0. Ignore
     if matches_ignore(rel_path, full_path.is_dir(), &ignore_patterns) {
         return (StatusCode::NOT_FOUND, res_headers, "404 Not Found").into_response();
+    }
+
+    // 0.1 Basic Auth
+    if let Some(auth_res) = check_auth(&state.config, &path, req.headers()) {
+        return auth_res.into_response();
     }
 
     // 1. Global Headers
@@ -304,6 +310,69 @@ async fn render_directory_listing(dir: &Path, virt_path: &str, ignore_patterns: 
     Ok(html)
 }
 
+fn check_auth(config: &Config, path: &str, headers: &header::HeaderMap) -> Option<axum::response::Response> {
+    let auth_rules = config.auth.as_ref()?;
+    
+    // Find all matching rules
+    let mut matching_rules: Vec<&crate::config::AuthRule> = auth_rules.iter()
+        .filter(|rule| Pattern::new(&rule.source).map(|p| p.matches(path)).unwrap_or(false))
+        .collect();
+
+    if matching_rules.is_empty() {
+        return None;
+    }
+
+    // Sort by source length (descending) to get most specific first.
+    // Ties are broken by original order (stable sort).
+    matching_rules.sort_by(|a, b| b.source.len().cmp(&a.source.len()));
+    
+    let best_rule = matching_rules[0];
+    
+    match validate_credentials(best_rule, headers) {
+        Ok(_) => None,
+        Err(res) => Some(res.into_response()),
+    }
+}
+
+fn validate_credentials(rule: &crate::config::AuthRule, headers: &header::HeaderMap) -> Result<(), (StatusCode, [(header::HeaderName, &'static str); 1], &'static str)> {
+    let auth_header = headers.get(header::AUTHORIZATION)
+        .and_then(|h| h.to_str().ok())
+        .filter(|h| h.starts_with("Basic "))
+        .map(|h| &h[6..]);
+
+    if let Some(encoded) = auth_header {
+        if let Ok(decoded) = general_purpose::STANDARD.decode(encoded) {
+            if let Ok(credentials) = String::from_utf8(decoded) {
+                let parts: Vec<&str> = credentials.splitn(2, ':').collect();
+                if parts.len() == 2 {
+                    let username = parts[0];
+                    let password = parts[1];
+
+                    if username == rule.username {
+                        let expected_password = if let Some(env_var) = &rule.env_password {
+                            std::env::var(env_var).ok()
+                        } else {
+                            rule.password.clone()
+                        };
+
+                        if let Some(expected) = expected_password {
+                            if password == expected {
+                                return Ok(());
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Err((
+        StatusCode::UNAUTHORIZED,
+        [(header::WWW_AUTHENTICATE, "Basic realm=\"Restricted Area\"")],
+        "401 Unauthorized",
+    ))
+}
+
 fn matches_ignore(path: &str, is_dir: bool, patterns: &[Pattern]) -> bool {
     if path.is_empty() { return false; }
     for pattern in patterns {
@@ -430,5 +499,51 @@ mod tests {
         // Should be 404 because index.html is missing in current test env root,
         // but it verifies the fallback code path doesn't panic.
         assert_eq!(res.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn test_basic_auth() {
+        let state = Arc::new(AppState {
+            config: Config {
+                auth: Some(vec![crate::config::AuthRule {
+                    source: "/private/**".to_string(),
+                    username: "admin".to_string(),
+                    password: Some("password123".to_string()),
+                    env_password: None,
+                }]),
+                ..Default::default()
+            },
+            base_path: PathBuf::from("."),
+        });
+
+        // 1. No auth header
+        let req1 = Request::builder().uri("/private/index.html").body(Body::empty()).unwrap();
+        let res1 = handler(State(state.clone()), req1).await.into_response();
+        assert_eq!(res1.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(res1.headers().get(header::WWW_AUTHENTICATE).unwrap(), "Basic realm=\"Restricted Area\"");
+
+        // 2. Wrong credentials
+        let bad_auth = general_purpose::STANDARD.encode("admin:wrong");
+        let req2 = Request::builder()
+            .uri("/private/index.html")
+            .header(header::AUTHORIZATION, format!("Basic {}", bad_auth))
+            .body(Body::empty()).unwrap();
+        let res2 = handler(State(state.clone()), req2).await.into_response();
+        assert_eq!(res2.status(), StatusCode::UNAUTHORIZED);
+
+        // 3. Correct credentials
+        let good_auth = general_purpose::STANDARD.encode("admin:password123");
+        let req3 = Request::builder()
+            .uri("/private/index.html")
+            .header(header::AUTHORIZATION, format!("Basic {}", good_auth))
+            .body(Body::empty()).unwrap();
+        let res3 = handler(State(state.clone()), req3).await.into_response();
+        // Should not be 401. Might be 404 since file doesn't exist, but that's past the auth check.
+        assert_ne!(res3.status(), StatusCode::UNAUTHORIZED);
+
+        // 4. Public path (no auth needed)
+        let req4 = Request::builder().uri("/public/index.html").body(Body::empty()).unwrap();
+        let res4 = handler(State(state), req4).await.into_response();
+        assert_ne!(res4.status(), StatusCode::UNAUTHORIZED);
     }
 }

@@ -24,3 +24,13 @@ ignore = [".env", "node_modules/**"]
 [stream]
 streamExtensions = ["mp4", "webm", "ogg", "mp3", "wav", "pdf"]
 enableRanges = true
+
+[[auth]]
+source = "/private/**"
+username = "admin"
+password = "secretpassword"
+
+[[auth]]
+source = "/staging/**"
+username = "tester"
+env_password = "STAGING_PASSWORD"

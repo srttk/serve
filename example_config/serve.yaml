@@ -27,3 +27,10 @@ stream:
     - wav
     - pdf
   enableRanges: true
+auth:
+  - source: /private/**
+    username: admin
+    password: secretpassword
+  - source: /staging/**
+    username: tester
+    env_password: STAGING_PASSWORD

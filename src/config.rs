@@ -18,6 +18,15 @@ pub struct Config {
     pub ignore: Option<Vec<String>>,
     pub stream: Option<StreamConfig>,
     pub spa: Option<bool>,
+    pub auth: Option<Vec<AuthRule>>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct AuthRule {
+    pub source: String,
+    pub username: String,
+    pub password: Option<String>,
+    pub env_password: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -134,12 +143,23 @@ impl Config {
                 }],
             }]),
             ignore: Some(vec![
-                ".DS_Store".to_string(),
+                "DS_Store".to_string(),
                 ".env".to_string(),
                 "node_modules/**".to_string(),
-                ".git/**".to_string()
             ]),
-            stream: Some(StreamConfig::default()),
+            stream: Some(StreamConfig {
+                stream_extensions: Some(vec![
+                    "mp4".to_string(),
+                    "webm".to_string(),
+                    "ogg".to_string(),
+                    "mp3".to_string(),
+                    "wav".to_string(),
+                    "pdf".to_string(),
+                    "mkv".to_string(),
+                    "mov".to_string(),
+                ]),
+                enable_ranges: Some(true),
+            }),
             ..Default::default()
         };
 
