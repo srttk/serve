@@ -10,6 +10,7 @@ use std::net::SocketAddr;
 use crate::config::Config;
 use crate::handler::{handler, AppState};
 use crate::banner::print_banner;
+use tower_http::trace::TraceLayer;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
@@ -80,6 +81,7 @@ async fn main() -> anyhow::Result<()> {
 
     let app = Router::new()
         .fallback(any(handler))
+        .layer(TraceLayer::new_for_http())
         .with_state(shared_state)
         .layer(DefaultBodyLimit::max(1024 * 1024 * 1024)); // 1GB limit for body
 
