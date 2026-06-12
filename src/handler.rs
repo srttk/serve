@@ -14,6 +14,27 @@ use mime_guess::from_path;
 use glob::Pattern;
 use tokio_util::io::ReaderStream;
 use base64::{Engine as _, engine::general_purpose};
+use askama::Template;
+
+#[derive(Template)]
+#[template(path = "listing.html")]
+struct ListingTemplate {
+    path: String,
+    breadcrumbs: Vec<Breadcrumb>,
+    entries: Vec<Entry>,
+}
+
+struct Breadcrumb {
+    name: String,
+    url: String,
+}
+
+struct Entry {
+    name: String,
+    url: String,
+    is_dir: bool,
+    size: String,
+}
 
 pub struct AppState {
     pub config: Config,
@@ -272,12 +293,14 @@ fn parse_range(range: &str, size: u64) -> Option<ByteRange> {
 }
 
 async fn render_directory_listing(dir: &Path, virt_path: &str, ignore_patterns: &[Pattern]) -> Result<String, std::io::Error> {
-    let mut entries = fs::read_dir(dir).await?;
+    let mut entries_iter = fs::read_dir(dir).await?;
     let mut files = Vec::new();
     
-    while let Some(entry) = entries.next_entry().await? {
+    while let Some(entry) = entries_iter.next_entry().await? {
         let name = entry.file_name().to_string_lossy().to_string();
-        let is_dir = entry.file_type().await?.is_dir();
+        let metadata = entry.metadata().await?;
+        let is_dir = metadata.is_dir();
+        let size = metadata.len();
         
         let rel_item_path = if virt_path.ends_with('/') {
             format!("{}{}", virt_path, name)
@@ -287,27 +310,53 @@ async fn render_directory_listing(dir: &Path, virt_path: &str, ignore_patterns: 
         let trim_rel_path = rel_item_path.trim_start_matches('/');
 
         if !matches_ignore(trim_rel_path, is_dir, ignore_patterns) {
-            files.push((name, is_dir));
+            files.push(Entry {
+                name: name.clone(),
+                url: format!("{}{}", utf8_percent_encode(&name, NON_ALPHANUMERIC), if is_dir { "/" } else { "" }),
+                is_dir,
+                size: if is_dir { String::new() } else { format_size(size) },
+            });
         }
     }
     
-    files.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(&b.0)));
+    files.sort_by(|a, b| b.is_dir.cmp(&a.is_dir).then(a.name.cmp(&b.name)));
 
-    let mut html = format!("<html><head><title>Index of {}</title><style>body{{font-family:sans-serif;padding:20px;}}ul{{list-style:none;padding:0;}}li{{margin-bottom:10px;}}a{{text-decoration:none;color:#007bff;}}a:hover{{text-decoration:underline;}}</style></head><body>", virt_path);
-    html.push_str(&format!("<h1>Index of {}</h1><ul>", virt_path));
+    let mut breadcrumbs = Vec::new();
+    let mut current_url = String::from("/");
+    let parts: Vec<&str> = virt_path.split('/').filter(|s| !s.is_empty()).collect();
     
-    if virt_path != "/" {
-        html.push_str("<li><a href=\"..\">..</a></li>");
+    for part in parts {
+        current_url.push_str(&utf8_percent_encode(part, NON_ALPHANUMERIC).to_string());
+        current_url.push('/');
+        breadcrumbs.push(Breadcrumb {
+            name: part.to_string(),
+            url: current_url.clone(),
+        });
     }
 
-    for (name, is_dir) in files {
-        let suffix = if is_dir { "/" } else { "" };
-        let encoded_name = utf8_percent_encode(&name, NON_ALPHANUMERIC).to_string();
-        html.push_str(&format!("<li><a href=\"{}{}\">{}{}</a></li>", encoded_name, suffix, name, suffix));
+    let template = ListingTemplate {
+        path: virt_path.to_string(),
+        breadcrumbs,
+        entries: files,
+    };
+
+    template.render().map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+}
+
+fn format_size(size: u64) -> String {
+    const KB: u64 = 1024;
+    const MB: u64 = KB * 1024;
+    const GB: u64 = MB * 1024;
+
+    if size >= GB {
+        format!("{:.2} GB", size as f64 / GB as f64)
+    } else if size >= MB {
+        format!("{:.2} MB", size as f64 / MB as f64)
+    } else if size >= KB {
+        format!("{:.2} KB", size as f64 / KB as f64)
+    } else {
+        format!("{} B", size)
     }
-    
-    html.push_str("</ul></body></html>");
-    Ok(html)
 }
 
 fn check_auth(config: &Config, path: &str, headers: &header::HeaderMap) -> Option<axum::response::Response> {

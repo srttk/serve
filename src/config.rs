@@ -143,9 +143,14 @@ impl Config {
                 }],
             }]),
             ignore: Some(vec![
-                "DS_Store".to_string(),
+                ".DS_Store".to_string(),
                 ".env".to_string(),
                 "node_modules/**".to_string(),
+                ".git/**".to_string(),
+                "serve.json".to_string(),
+                "serve.yaml".to_string(),
+                "serve.yml".to_string(),
+                "serve.toml".to_string(),
             ]),
             stream: Some(StreamConfig {
                 stream_extensions: Some(vec![
