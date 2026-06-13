@@ -76,7 +76,7 @@
             font-family: var(--font-mono);
             font-size: 0.8rem;
             border-radius: 4px;
-            transition: all 0.2s ease;
+            transition: all 0.5s ease;
         }
 
         #theme-toggle:hover {
@@ -118,7 +118,7 @@
             margin-right: 12px;
             width: 16px;
             text-align: center;
-            color: var(--accents-3);
+            color: var(--fg);
         }
 
         .entry-meta {
@@ -141,6 +141,9 @@
                 display: none;
             }
         }
+        
+
+    
     </style>
 </head>
 <body>
@@ -167,7 +170,11 @@
                 {% for entry in entries %}
                 <li class="entry-item">
                     <span class="icon">
-                        {% if entry.is_dir %}📁{% else %}📄{% endif %}
+                        {% if entry.is_dir %}<div class="icon-directory">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>
+                        </div>{% else %}<div class="icon-file">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ><path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/><path d="M14 2v5a1 1 0 0 0 1 1h5"/></svg>
+                        </div>{% endif %}
                     </span>
                     <a href="{{ entry.url }}">{{ entry.name }}</a>
                     <span class="entry-meta">
@@ -178,8 +185,10 @@
             </ul>
         </main>
 
+       
+
         <footer>
-            serve-handler port in Rust
+            srttk/serve
         </footer>
     </div>
 
