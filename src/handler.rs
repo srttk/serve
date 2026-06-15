@@ -113,7 +113,7 @@ pub async fn handler(
     // 4. Trailing Slash
     if let Some(ts) = state.config.trailing_slash {
         if ts {
-            if !path.ends_with('/') && !path.contains('.') {
+            if !path.ends_with('/') && !path.contains('.') && !full_path.is_file() {
                 return (StatusCode::MOVED_PERMANENTLY, [(header::LOCATION, format!("{}/", path))]).into_response();
             }
         } else {
@@ -463,6 +463,29 @@ mod tests {
         assert_eq!(res.status(), StatusCode::MOVED_PERMANENTLY);
         assert_eq!(res.headers().get(header::LOCATION).unwrap(), "/test/");
     }
+
+    #[tokio::test]
+    async fn test_no_extension_file_no_redirect() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("no_extension");
+        fs::write(&file_path, "test content").await.unwrap();
+
+        let state = Arc::new(AppState {
+            config: Config {
+                trailing_slash: Some(true),
+                ..Default::default()
+            },
+            base_path: temp_dir.path().to_path_buf(),
+        });
+
+        let req = Request::builder().uri("/no_extension").body(Body::empty()).unwrap();
+        let res = handler(State(state), req).await.into_response();
+        
+        // Before fix, this will be MOVED_PERMANENTLY to /no_extension/
+        // After fix, this should be OK (or 404 if it fails later, but NOT redirect)
+        assert_ne!(res.status(), StatusCode::MOVED_PERMANENTLY);
+    }
+
 
     #[tokio::test]
     async fn test_clean_urls_redirect() {
